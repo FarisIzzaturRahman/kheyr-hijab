@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import About from './components/About';
 import Advantages from './components/Advantages';
 import Collections from './components/Collections';
@@ -11,12 +12,13 @@ import Testimonials from './components/Testimonials';
 import useScrollExperience from './hooks/useScrollExperience';
 
 export default function App() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { activeSection, heroOffset, scrollProgress, showFloatingCta } = useScrollExperience();
 
   return (
     <>
       <ScrollProgress value={scrollProgress} />
-      <Header activeSection={activeSection} />
+      <Header activeSection={activeSection} onMenuOpenChange={setMobileMenuOpen} />
       <main>
         <Hero scrollOffset={heroOffset} />
         <About />
@@ -26,7 +28,7 @@ export default function App() {
         <Faq />
       </main>
       <Footer />
-      <FloatingWhatsApp visible={showFloatingCta} />
+      <FloatingWhatsApp visible={showFloatingCta && !mobileMenuOpen} />
     </>
   );
 }

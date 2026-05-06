@@ -1,15 +1,19 @@
 import { ArrowRight, Menu, MessageCircle, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { brand, navItems } from '../data/content';
 
 const orderUrl = `https://wa.me/${brand.whatsapp}?text=${encodeURIComponent(
   'Assalamu alaikum KHEYR, saya ingin tanya koleksi hijab.'
 )}`;
 
-export default function Header({ activeSection = 'beranda' }) {
+export default function Header({ activeSection = 'beranda', onMenuOpenChange }) {
   const [open, setOpen] = useState(false);
 
   const closeMenu = () => setOpen(false);
+
+  useEffect(() => {
+    onMenuOpenChange?.(open);
+  }, [onMenuOpenChange, open]);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-champagne/15 bg-emeraldInk/95 text-pearl backdrop-blur-xl">
@@ -56,7 +60,7 @@ export default function Header({ activeSection = 'beranda' }) {
       </nav>
 
       {open ? (
-        <div className="border-t border-champagne/15 bg-emeraldInk px-4 pb-5 pt-2 lg:hidden">
+        <div className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-champagne/15 bg-emeraldInk/98 px-4 pb-5 pt-2 shadow-emerald lg:hidden">
           <div className="flex flex-col gap-1">
             {navItems.map((item) => (
               <a

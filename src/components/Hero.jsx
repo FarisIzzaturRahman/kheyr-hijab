@@ -10,7 +10,7 @@ export default function Hero({ scrollOffset = 0 }) {
     <section id="beranda" className="relative overflow-hidden pt-16 lg:pt-[72px]">
       <div className="grid min-h-[calc(100vh-4rem)] bg-emeraldInk lg:grid-cols-[1.05fr_1fr]">
         <div
-          className="relative flex items-center overflow-hidden bg-satin bg-cover bg-center px-4 py-16 sm:px-6 lg:px-10 xl:px-16"
+          className="relative flex items-center overflow-hidden bg-satin bg-cover bg-center px-4 py-14 sm:px-6 lg:px-10 lg:py-16 xl:px-16"
           style={{ backgroundPosition: `center ${scrollOffset * -0.45}px` }}
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(232,217,189,0.18),transparent_28%),linear-gradient(105deg,rgba(6,29,24,0.28),rgba(6,29,24,0.84))]" />
@@ -21,7 +21,7 @@ export default function Hero({ scrollOffset = 0 }) {
             <h1 className="font-display text-7xl font-semibold leading-none text-[#f1e4c9] drop-shadow-[0_8px_30px_rgba(0,0,0,0.16)] sm:text-8xl lg:text-9xl">
               {brand.name}
             </h1>
-            <p className="mt-5 max-w-lg text-lg font-semibold uppercase text-pearl">
+            <p className="mt-5 max-w-lg text-balance text-base font-semibold uppercase leading-7 text-pearl sm:text-lg">
               {brand.tagline}
             </p>
             <p className="mt-5 max-w-md text-base leading-8 text-pearl/90">{brand.intro}</p>
@@ -29,14 +29,14 @@ export default function Hero({ scrollOffset = 0 }) {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a
                 href="#koleksi"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-pearl px-6 py-3 text-sm font-bold text-emeraldInk shadow-soft transition hover:-translate-y-0.5 hover:bg-champagne"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-pearl px-6 py-3 text-sm font-bold text-emeraldInk shadow-soft transition hover:-translate-y-0.5 hover:bg-champagne"
               >
                 Lihat Koleksi
                 <ArrowRight size={17} />
               </a>
               <a
                 href={orderUrl}
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-champagne/70 px-6 py-3 text-sm font-bold text-pearl transition hover:-translate-y-0.5 hover:bg-champagne hover:text-emeraldInk"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-champagne/70 px-6 py-3 text-sm font-bold text-pearl transition hover:-translate-y-0.5 hover:bg-champagne hover:text-emeraldInk"
               >
                 <MessageCircle size={17} />
                 Order via WhatsApp
@@ -53,7 +53,7 @@ export default function Hero({ scrollOffset = 0 }) {
           </a>
         </div>
 
-        <div className="relative min-h-[440px] overflow-hidden bg-mist lg:min-h-full">
+        <div className="relative min-h-[360px] overflow-hidden bg-mist sm:min-h-[440px] lg:min-h-full">
           <img
             src="/images/hero-kheyr.png"
             alt="Model menggunakan hijab KHEYR bernuansa champagne"
