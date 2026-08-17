@@ -28,11 +28,9 @@ export default function About() {
               return (
                 <article
                   key={value.title}
-                  className="rounded-lg border border-goldMuted/20 bg-pearlWarm/80 p-5 shadow-[0_14px_40px_rgba(34,25,15,0.05)]"
-                  data-reveal
-                  style={{ '--reveal-delay': `${index * 70}ms` }}
+                  className="rounded-xl border border-goldMuted/20 bg-pearlWarm/80 p-5 shadow-[0_14px_40px_rgba(34,25,15,0.05)] transition hover:shadow-soft hover:-translate-y-0.5"
                 >
-                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-goldMuted/30 text-goldMuted">
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-goldMuted/30 text-goldMuted bg-white/80">
                     <Icon size={20} />
                   </div>
                   <h3 className="font-semibold text-ink">{value.title}</h3>
@@ -43,15 +41,17 @@ export default function About() {
           </div>
         </div>
 
-        <div className="relative" data-reveal>
-          <div className="overflow-hidden rounded-lg border border-champagne/50 bg-mist shadow-soft">
+        <div className="relative">
+          <div className="overflow-hidden rounded-2xl border border-champagne/50 bg-mist shadow-soft">
             <img
-              src="/images/product-luna-silk.png"
+              src="/images/product-luna-silk.jpg"
               alt="Koleksi KHEYR Luna Silk"
               className="h-[520px] w-full object-cover object-center"
+              loading="lazy"
+              decoding="async"
             />
           </div>
-          <div className="absolute -bottom-8 -left-4 hidden w-44 overflow-hidden rounded-lg border border-champagne/50 bg-satin bg-cover bg-center p-6 text-center shadow-emerald sm:block">
+          <div className="absolute -bottom-8 -left-4 hidden w-44 overflow-hidden rounded-2xl border border-champagne/50 bg-satin bg-cover bg-center p-6 text-center shadow-emerald sm:block">
             <p className="font-display text-4xl font-semibold text-champagne">KHEYR</p>
             <p className="mt-3 text-xs font-semibold text-pearl/80">Elegan, nyaman, terpercaya.</p>
           </div>

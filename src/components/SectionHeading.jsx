@@ -2,7 +2,7 @@ export default function SectionHeading({ eyebrow, title, children, align = 'left
   const alignment = align === 'center' ? 'items-center text-center mx-auto' : 'items-start text-left';
 
   return (
-    <div className={`mb-8 flex max-w-3xl flex-col ${alignment} gap-3 md:mb-11`} data-reveal>
+    <div className={`mb-8 flex max-w-3xl flex-col ${alignment} gap-3 md:mb-11`}>
       {eyebrow ? <p className="text-sm font-semibold uppercase text-goldMuted">{eyebrow}</p> : null}
       <div className="flex w-full flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
