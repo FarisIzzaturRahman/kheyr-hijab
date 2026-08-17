@@ -19,22 +19,20 @@ export default function Advantages() {
           disentuh, dipakai, sampai diterima sebagai paket yang cantik.
         </SectionHeading>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
           {advantages.map((item, index) => {
             const Icon = icons[index];
 
             return (
               <article
                 key={item.title}
-                className="rounded-lg border border-goldMuted/20 bg-white/75 p-6 text-center shadow-[0_16px_46px_rgba(34,25,15,0.05)]"
-                data-reveal
-                style={{ '--reveal-delay': `${index * 70}ms` }}
+                className="rounded-2xl border border-goldMuted/20 bg-white/80 p-6 text-center shadow-[0_16px_46px_rgba(34,25,15,0.05)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-soft"
               >
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg border border-goldMuted/25 text-goldMuted">
-                  <Icon size={30} strokeWidth={1.6} />
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-goldMuted/25 bg-pearlWarm/60 text-goldMuted shadow-inner">
+                  <Icon size={28} strokeWidth={1.7} />
                 </div>
                 <h3 className="mt-5 font-bold text-ink">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-ink/60">{item.description}</p>
+                <p className="mt-3 text-sm leading-6 text-ink/65">{item.description}</p>
               </article>
             );
           })}
