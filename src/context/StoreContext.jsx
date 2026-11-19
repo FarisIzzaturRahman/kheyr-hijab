@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   brand as defaultBrand,
   colorMap as defaultColorMap,
@@ -342,6 +342,22 @@ export function StoreProvider({ children }) {
     return Array.isArray(saved) ? saved : [];
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [cartToast, setCartToast] = useState(null);
+  const cartToastTimerRef = useRef(null);
+
+  const dismissCartToast = useCallback(() => {
+    if (cartToastTimerRef.current) {
+      clearTimeout(cartToastTimerRef.current);
+      cartToastTimerRef.current = null;
+    }
+    setCartToast(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cartToastTimerRef.current) clearTimeout(cartToastTimerRef.current);
+    };
+  }, []);
 
   // Supabase Auth state
   const [authUser, setAuthUser] = useState(null);
@@ -589,6 +605,14 @@ export function StoreProvider({ children }) {
           }
         ];
       });
+
+      setCartToast({ productName: product.name, color: chosenColor });
+      if (cartToastTimerRef.current) clearTimeout(cartToastTimerRef.current);
+      cartToastTimerRef.current = setTimeout(() => {
+        setCartToast(null);
+        cartToastTimerRef.current = null;
+      }, 3200);
+
       return { ok: true };
     },
     [getVariantStock]
@@ -1518,6 +1542,8 @@ export function StoreProvider({ children }) {
       cartCount,
       isCartOpen,
       setIsCartOpen,
+      cartToast,
+      dismissCartToast,
       addToCart,
       updateCartQuantity,
       removeFromCart,
@@ -1566,6 +1592,8 @@ export function StoreProvider({ children }) {
       cart,
       cartCount,
       isCartOpen,
+      cartToast,
+      dismissCartToast,
       addToCart,
       updateCartQuantity,
       removeFromCart,

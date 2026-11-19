@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
   CheckCircle2,
@@ -7,6 +8,7 @@ import {
   Minus,
   Plus,
   ShoppingBag,
+  Sparkles,
   Tag,
   Trash2,
   X
@@ -15,14 +17,30 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { safeUrl, useStore } from '../context/StoreContext';
 
+const BUYER_PROFILE_KEY = 'kheyr_buyer_profile_v1';
+
+function loadBuyerProfile() {
+  try {
+    const raw = localStorage.getItem(BUYER_PROFILE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return { customerName: '', customerPhone: '', shippingAddress: '' };
+}
+
 export default function CartDrawer() {
   const {
     cart,
+    cartCount,
     isCartOpen,
     setIsCartOpen,
+    cartToast,
+    dismissCartToast,
     products,
     promoCodes,
     getVariantStock,
+    addToCart,
     updateCartQuantity,
     removeFromCart,
     calculateCartPromo,
@@ -31,9 +49,13 @@ export default function CartDrawer() {
   } = useStore();
 
   const [step, setStep] = useState('cart'); // 'cart' | 'checkout' | 'success'
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [shippingAddress, setShippingAddress] = useState('');
+  const [initialProfile] = useState(loadBuyerProfile);
+  const [customerName, setCustomerName] = useState(initialProfile.customerName || '');
+  const [customerPhone, setCustomerPhone] = useState(initialProfile.customerPhone || '');
+  const [shippingAddress, setShippingAddress] = useState(initialProfile.shippingAddress || '');
+  const [hasSavedProfile, setHasSavedProfile] = useState(
+    Boolean(initialProfile.customerName || initialProfile.customerPhone || initialProfile.shippingAddress)
+  );
   const [notes, setNotes] = useState('');
   const [promoInput, setPromoInput] = useState('');
   const [error, setError] = useState('');
@@ -66,16 +88,46 @@ export default function CartDrawer() {
           product,
           unitPrice,
           lineTotal: unitPrice * item.quantity,
-          maxStock
+          maxStock,
+          exceedsStock: item.quantity > maxStock
         };
       })
       .filter(Boolean);
   }, [cart, products, getVariantStock]);
 
+  const hasStockConflict = useMemo(
+    () => enrichedItems.some((item) => item.exceedsStock),
+    [enrichedItems]
+  );
+
   const subtotal = useMemo(
     () => enrichedItems.reduce((sum, item) => sum + item.lineTotal, 0),
     [enrichedItems]
   );
+
+  // Target promo for the AOV progress bar (active 'all'-product promo with lowest positive minPurchase)
+  const targetMilestonePromo = useMemo(() => {
+    const candidates = promoCodes
+      .filter((p) => p.isActive && p.applicableTo === 'all' && p.minPurchase > 0)
+      .sort((a, b) => a.minPurchase - b.minPurchase);
+    return candidates[0] || null;
+  }, [promoCodes]);
+
+  // Quick upsell item (prefer inner-ninja or cheapest in-stock product not yet in cart)
+  const upsellProduct = useMemo(() => {
+    if (!targetMilestonePromo || subtotal <= 0 || subtotal >= targetMilestonePromo.minPurchase) return null;
+    const inCartIds = new Set(enrichedItems.map((i) => i.productId));
+    const candidates = products
+      .filter((p) => !inCartIds.has(p.id))
+      .map((p) => {
+        const availableColor = (p.colors || []).find((c) => getVariantStock(p.id, c) > 0);
+        return availableColor ? { product: p, color: availableColor } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => (a.product.numericPrice || 0) - (b.product.numericPrice || 0));
+
+    return candidates[0] || null;
+  }, [targetMilestonePromo, subtotal, enrichedItems, products, getVariantStock]);
 
   const promoPreview = useMemo(() => {
     const code = promoInput.trim().toUpperCase();
@@ -92,7 +144,7 @@ export default function CartDrawer() {
     return Math.max(0, subtotal - disc);
   }, [subtotal, promoPreview]);
 
-  if (!isCartOpen || typeof document === 'undefined') return null;
+  if (typeof document === 'undefined') return null;
 
   const handleClose = () => {
     setIsCartOpen(false);
@@ -103,6 +155,26 @@ export default function CartDrawer() {
       }
       setError('');
     }, 200);
+  };
+
+  const handleProceedToCheckout = () => {
+    // Auto-fill unlocked milestone promo code if user hasn't typed one yet
+    if (!promoInput && targetMilestonePromo && subtotal >= targetMilestonePromo.minPurchase) {
+      setPromoInput(targetMilestonePromo.code);
+    }
+    setStep('checkout');
+  };
+
+  const handleClearSavedProfile = () => {
+    try {
+      localStorage.removeItem(BUYER_PROFILE_KEY);
+    } catch {
+      // ignore
+    }
+    setCustomerName('');
+    setCustomerPhone('');
+    setShippingAddress('');
+    setHasSavedProfile(false);
   };
 
   const handleCheckoutSubmit = async (e) => {
@@ -125,16 +197,75 @@ export default function CartDrawer() {
       return;
     }
 
+    // Save buyer profile locally for convenient repeat orders
+    try {
+      localStorage.setItem(
+        BUYER_PROFILE_KEY,
+        JSON.stringify({
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          shippingAddress: shippingAddress.trim()
+        })
+      );
+      setHasSavedProfile(true);
+    } catch {
+      // ignore
+    }
+
     setCreatedOrder(res.order);
     setStep('success');
-    setCustomerName('');
-    setCustomerPhone('');
-    setShippingAddress('');
     setNotes('');
     setPromoInput('');
   };
 
   const activePromos = promoCodes.filter((p) => p.isActive);
+
+  // Floating Mini-Toast when item is added while drawer is closed
+  const toastPortal =
+    !isCartOpen && cartToast
+      ? createPortal(
+          <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] left-4 right-4 sm:left-6 sm:right-auto z-50 flex items-center justify-between gap-3 rounded-2xl border border-champagne/40 bg-emeraldInk px-4 py-3 text-xs text-pearl shadow-2xl animate-floatIn sm:max-w-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-champagne/20 text-champagne">
+                <Check size={14} className="stroke-[3]" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-champagne truncate">{cartToast.productName}</p>
+                <p className="text-[11px] text-pearl/75">Warna {cartToast.color} masuk keranjang</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  dismissCartToast();
+                  setIsCartOpen(true);
+                }}
+                className="rounded-full bg-champagne px-3 py-1.5 text-[11px] font-bold text-emeraldInk hover:bg-pearl transition"
+              >
+                Lihat ({cartCount})
+              </button>
+              <button
+                type="button"
+                onClick={dismissCartToast}
+                aria-label="Tutup notifikasi keranjang"
+                className="p-1 text-pearl/50 hover:text-pearl"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
+
+  if (!isCartOpen) return toastPortal;
+
+  const remainingForPromo =
+    targetMilestonePromo ? Math.max(0, targetMilestonePromo.minPurchase - subtotal) : 0;
+  const promoProgressPct = targetMilestonePromo
+    ? Math.min(100, Math.round((subtotal / targetMilestonePromo.minPurchase) * 100))
+    : 0;
 
   const drawer = (
     <div className="fixed inset-0 z-[9999] flex justify-end" role="dialog" aria-modal="true" aria-label="Keranjang Belanja">
@@ -178,6 +309,34 @@ export default function CartDrawer() {
         {/* STEP 1: CART ITEMS */}
         {step === 'cart' && (
           <>
+            {/* Promo Progress Bar */}
+            {enrichedItems.length > 0 && targetMilestonePromo && (
+              <div className="border-b border-goldMuted/20 bg-champagne/25 px-5 py-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emeraldInk">
+                  <Sparkles size={14} className="text-goldMuted shrink-0" />
+                  {remainingForPromo > 0 ? (
+                    <span>
+                      Tambah <strong>Rp {remainingForPromo.toLocaleString('id-ID')}</strong> lagi untuk hemat{' '}
+                      {targetMilestonePromo.discountType === 'percentage'
+                        ? `${targetMilestonePromo.discountValue}%`
+                        : `Rp ${targetMilestonePromo.discountValue.toLocaleString('id-ID')}`}{' '}
+                      (<span className="font-mono">{targetMilestonePromo.code}</span>)
+                    </span>
+                  ) : (
+                    <span className="text-emeraldSoft">
+                      Selamat! Promo <span className="font-mono">{targetMilestonePromo.code}</span> sudah siap dipakai!
+                    </span>
+                  )}
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-goldMuted/20">
+                  <div
+                    className="h-full rounded-full bg-emeraldSoft transition-all duration-300"
+                    style={{ width: `${promoProgressPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-5">
               {enrichedItems.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-center py-12">
@@ -186,7 +345,7 @@ export default function CartDrawer() {
                   </div>
                   <h3 className="mt-4 font-display text-xl font-bold text-ink">Keranjang Masih Kosong</h3>
                   <p className="mt-1.5 max-w-xs text-xs text-ink/60 leading-relaxed">
-                    Pilih koleksi hijab favoritmu dan klik <strong>Tambah ke Keranjang</strong> untuk mulai berbelanja.
+                    Pilih koleksi hijab favoritmu dan klik <strong>+ Keranjang</strong> untuk mulai berbelanja.
                   </p>
                 </div>
               ) : (
@@ -194,62 +353,114 @@ export default function CartDrawer() {
                   {enrichedItems.map((item) => (
                     <div
                       key={`${item.productId}-${item.color}`}
-                      className="flex gap-3.5 rounded-2xl border border-goldMuted/20 bg-white p-3.5 shadow-xs"
+                      className={`rounded-2xl border bg-white p-3.5 shadow-xs ${
+                        item.exceedsStock ? 'border-roseClay/60 ring-1 ring-roseClay/30' : 'border-goldMuted/20'
+                      }`}
                     >
-                      <img
-                        src={safeUrl(item.product.image, '/images/product-daily-voile.jpg')}
-                        alt={item.product.name}
-                        className="h-20 w-16 shrink-0 rounded-xl object-cover bg-mist"
-                      />
-                      <div className="flex flex-1 flex-col justify-between min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-bold text-sm text-ink truncate">{item.product.name}</p>
-                            <p className="text-xs text-ink/60">
-                              Warna: <span className="font-semibold text-goldMuted">{item.color}</span>
-                            </p>
+                      <div className="flex gap-3.5">
+                        <img
+                          src={safeUrl(item.product.image, '/images/product-daily-voile.jpg')}
+                          alt={item.product.name}
+                          className="h-20 w-16 shrink-0 rounded-xl object-cover bg-mist"
+                        />
+                        <div className="flex flex-1 flex-col justify-between min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-ink truncate">{item.product.name}</p>
+                              <p className="text-xs text-ink/60">
+                                Warna: <span className="font-semibold text-goldMuted">{item.color}</span>
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeFromCart(item.productId, item.color)}
+                              aria-label={`Hapus ${item.product.name}`}
+                              className="rounded-lg p-1 text-ink/40 hover:bg-roseClay/10 hover:text-roseClay transition"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => removeFromCart(item.productId, item.color)}
-                            aria-label={`Hapus ${item.product.name}`}
-                            className="rounded-lg p-1 text-ink/40 hover:bg-roseClay/10 hover:text-roseClay transition"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
 
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-sm font-bold text-emeraldSoft">
-                            Rp {item.lineTotal.toLocaleString('id-ID')}
-                          </span>
-
-                          <div className="inline-flex items-center gap-1 rounded-full border border-goldMuted/30 bg-pearlWarm/60 px-1.5 py-0.5">
-                            <button
-                              type="button"
-                              onClick={() => updateCartQuantity(item.productId, item.color, item.quantity - 1)}
-                              aria-label="Kurangi jumlah"
-                              className="flex h-6 w-6 items-center justify-center rounded-full text-ink hover:bg-white transition"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <span className="min-w-[1.5rem] text-center text-xs font-bold text-ink">
-                              {item.quantity}
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-sm font-bold text-emeraldSoft">
+                              Rp {item.lineTotal.toLocaleString('id-ID')}
                             </span>
-                            <button
-                              type="button"
-                              disabled={item.quantity >= item.maxStock}
-                              onClick={() => updateCartQuantity(item.productId, item.color, item.quantity + 1)}
-                              aria-label="Tambah jumlah"
-                              className="flex h-6 w-6 items-center justify-center rounded-full text-ink hover:bg-white transition disabled:opacity-35"
-                            >
-                              <Plus size={12} />
-                            </button>
+
+                            <div className="inline-flex items-center gap-1 rounded-full border border-goldMuted/30 bg-pearlWarm/60 px-1.5 py-0.5">
+                              <button
+                                type="button"
+                                onClick={() => updateCartQuantity(item.productId, item.color, item.quantity - 1)}
+                                aria-label="Kurangi jumlah"
+                                className="flex h-6 w-6 items-center justify-center rounded-full text-ink hover:bg-white transition"
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className="min-w-[1.5rem] text-center text-xs font-bold text-ink">
+                                {item.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={item.quantity >= item.maxStock}
+                                onClick={() => updateCartQuantity(item.productId, item.color, item.quantity + 1)}
+                                aria-label="Tambah jumlah"
+                                className="flex h-6 w-6 items-center justify-center rounded-full text-ink hover:bg-white transition disabled:opacity-35"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
+
+                      {/* Stale Stock Conflict Warning */}
+                      {item.exceedsStock && (
+                        <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl bg-roseClay/10 px-3 py-2 text-[11px] font-bold text-roseClay">
+                          <span className="inline-flex items-center gap-1.5">
+                            <AlertTriangle size={13} className="shrink-0" />
+                            {item.maxStock <= 0
+                              ? 'Stok warna ini baru saja habis.'
+                              : `Stok tersisa ${item.maxStock} pcs.`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.productId, item.color, item.maxStock)}
+                            className="rounded-full bg-roseClay px-2.5 py-0.5 text-[10px] font-bold text-white hover:opacity-90 shrink-0"
+                          >
+                            {item.maxStock <= 0 ? 'Hapus' : `Set ${item.maxStock}`}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
+
+                  {/* Quick Upsell Card to help reach promo milestone */}
+                  {upsellProduct && (
+                    <div className="rounded-2xl border border-dashed border-goldMuted/40 bg-champagne/15 p-3.5">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-goldMuted">
+                        Lengkapi Pesananmu
+                      </p>
+                      <div className="mt-2 flex items-center gap-3">
+                        <img
+                          src={safeUrl(upsellProduct.product.image, '/images/product-daily-voile.jpg')}
+                          alt={upsellProduct.product.name}
+                          className="h-12 w-10 rounded-lg object-cover bg-mist shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-ink truncate">{upsellProduct.product.name}</p>
+                          <p className="text-[11px] font-semibold text-emeraldSoft">
+                            {upsellProduct.product.price} • {upsellProduct.color}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addToCart(upsellProduct.product, upsellProduct.color, 1)}
+                          className="rounded-full bg-emeraldSoft px-3 py-1.5 text-[11px] font-bold text-pearl hover:bg-emeraldDeep transition shrink-0"
+                        >
+                          + Tambah
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -262,10 +473,16 @@ export default function CartDrawer() {
                     Rp {subtotal.toLocaleString('id-ID')}
                   </span>
                 </div>
+                {hasStockConflict && (
+                  <p className="text-xs font-bold text-roseClay">
+                    Sesuaikan jumlah item yang melebihi stok terlebih dahulu.
+                  </p>
+                )}
                 <button
                   type="button"
-                  onClick={() => setStep('checkout')}
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft py-3.5 text-sm font-bold text-pearl shadow-emerald transition hover:bg-emeraldDeep"
+                  disabled={hasStockConflict}
+                  onClick={handleProceedToCheckout}
+                  className="flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft py-3.5 text-sm font-bold text-pearl shadow-emerald transition hover:bg-emeraldDeep disabled:opacity-45 disabled:cursor-not-allowed"
                 >
                   Lanjut ke Checkout
                 </button>
@@ -278,6 +495,45 @@ export default function CartDrawer() {
         {step === 'checkout' && (
           <form onSubmit={handleCheckoutSubmit} className="flex flex-1 flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Compact Order Summary */}
+              <div className="rounded-2xl border border-goldMuted/20 bg-white p-3.5 text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-ink/60">
+                    Ringkasan ({enrichedItems.reduce((s, i) => s + i.quantity, 0)} item)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStep('cart')}
+                    className="text-[11px] font-bold text-goldMuted hover:text-emeraldSoft"
+                  >
+                    Ubah
+                  </button>
+                </div>
+                {enrichedItems.map((item) => (
+                  <div key={`${item.productId}-${item.color}`} className="flex justify-between gap-2 text-ink/80">
+                    <span className="truncate">
+                      {item.product.name} ({item.color}) × {item.quantity}
+                    </span>
+                    <span className="font-bold text-ink shrink-0">
+                      Rp {item.lineTotal.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {hasSavedProfile && (
+                <div className="flex items-center justify-between rounded-xl bg-emeraldSoft/10 px-3 py-2 text-[11px] text-emeraldInk">
+                  <span>Data pengiriman diisi otomatis dari pesanan sebelumnya.</span>
+                  <button
+                    type="button"
+                    onClick={handleClearSavedProfile}
+                    className="font-bold text-roseClay hover:underline shrink-0 ml-2"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-ink/70">
                   Nama Lengkap Penerima *

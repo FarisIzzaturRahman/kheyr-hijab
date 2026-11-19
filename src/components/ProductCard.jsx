@@ -1,5 +1,5 @@
-import { Eye, ShoppingBag } from 'lucide-react';
-import { useState } from 'react';
+import { Check, Eye, ShoppingBag } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { safeUrl, useStore } from '../context/StoreContext';
 
 export default function ProductCard({
@@ -10,14 +10,26 @@ export default function ProductCard({
   aspectClass = 'aspect-[4/5]',
   showCatalogCategory = false
 }) {
-  const { getVariantStock, addToCart, setIsCartOpen } = useStore();
+  const { getVariantStock, addToCart } = useStore();
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || 'Emerald');
+  const [justAdded, setJustAdded] = useState(false);
+  const addedTimerRef = useRef(null);
   const stock = getVariantStock(product.id, selectedColor);
   const isOutOfStock = stock <= 0;
 
+  useEffect(() => {
+    return () => {
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+    };
+  }, []);
+
   const handleAddToCart = () => {
     const res = addToCart(product, selectedColor, 1);
-    if (res.ok) setIsCartOpen(true);
+    if (res.ok) {
+      setJustAdded(true);
+      if (addedTimerRef.current) clearTimeout(addedTimerRef.current);
+      addedTimerRef.current = setTimeout(() => setJustAdded(false), 1400);
+    }
   };
 
   return (
@@ -109,10 +121,18 @@ export default function ProductCard({
           type="button"
           disabled={isOutOfStock}
           onClick={handleAddToCart}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft px-4 py-2.5 text-xs sm:text-sm font-bold text-pearl shadow-sm transition hover:bg-emeraldDeep disabled:opacity-45 disabled:cursor-not-allowed"
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-xs sm:text-sm font-bold shadow-sm transition disabled:opacity-45 disabled:cursor-not-allowed ${
+            justAdded
+              ? 'bg-champagne text-emeraldInk'
+              : 'bg-emeraldSoft text-pearl hover:bg-emeraldDeep'
+          }`}
         >
-          <ShoppingBag size={15} />
-          {isOutOfStock ? `Habis (${selectedColor})` : `+ Keranjang (${selectedColor})`}
+          {justAdded ? <Check size={15} className="stroke-[3]" /> : <ShoppingBag size={15} />}
+          {isOutOfStock
+            ? `Habis (${selectedColor})`
+            : justAdded
+              ? 'Masuk Keranjang!'
+              : `+ Keranjang (${selectedColor})`}
         </button>
 
         <button
