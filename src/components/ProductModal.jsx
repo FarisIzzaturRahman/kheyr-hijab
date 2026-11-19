@@ -1,10 +1,10 @@
-import { Check, Info, Maximize2, MessageCircle, ShieldCheck, Sparkles, Tag, Ticket, X } from 'lucide-react';
+import { Check, Info, Maximize2, MessageCircle, ShieldCheck, ShoppingBag, Sparkles, Tag, Ticket, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { safeUrl, useStore } from '../context/StoreContext';
 
 export default function ProductModal({ product, onClose }) {
-  const { colorMap, waLinks, promoCodes, calculatePromoDiscount } = useStore();
+  const { colorMap, waLinks, promoCodes, calculatePromoDiscount, getVariantStock, addToCart, setIsCartOpen } = useStore();
   const [selectedColor, setSelectedColor] = useState(product?.colors?.[0] || '');
   const [isZoomed, setIsZoomed] = useState(false);
   const [selectedPromoCode, setSelectedPromoCode] = useState(null);
@@ -65,7 +65,17 @@ export default function ProductModal({ product, onClose }) {
 
   if (!product || typeof document === 'undefined') return null;
 
+  const currentStock = getVariantStock(product.id, selectedColor);
+  const isOutOfStock = currentStock <= 0;
   const orderUrl = waLinks.forProduct(product.name, selectedColor, appliedPromo);
+
+  const handleAddToCart = () => {
+    const res = addToCart(product, selectedColor, 1);
+    if (res.ok) {
+      onClose();
+      setIsCartOpen(true);
+    }
+  };
 
   const modalContent = (
     <div
@@ -209,7 +219,16 @@ export default function ProductModal({ product, onClose }) {
               <div className="mt-5 border-t border-goldMuted/15 pt-3.5">
                 <div className="flex items-center justify-between text-xs font-semibold text-ink">
                   <span>Pilihan Varian Warna:</span>
-                  <span className="font-bold text-goldMuted">{selectedColor}</span>
+                  <span>
+                    <span className="font-bold text-goldMuted">{selectedColor}</span>
+                    <span
+                      className={`ml-1.5 font-bold ${
+                        isOutOfStock ? 'text-roseClay' : currentStock <= 5 ? 'text-amber-600' : 'text-emeraldSoft'
+                      }`}
+                    >
+                      ({isOutOfStock ? 'Stok Habis' : `Tersedia ${currentStock}`})
+                    </span>
+                  </span>
                 </div>
                 <div className="mt-2.5 flex items-center gap-2.5">
                   {product.colors?.map((color) => {
@@ -278,16 +297,26 @@ export default function ProductModal({ product, onClose }) {
               </div>
             </div>
 
-            {/* Direct Order CTA */}
-            <div className="mt-6 pt-2">
+            {/* Direct Order CTAs */}
+            <div className="mt-6 pt-2 space-y-2">
+              <button
+                type="button"
+                disabled={isOutOfStock}
+                onClick={handleAddToCart}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft px-6 py-3.5 text-xs sm:text-sm font-bold text-pearl shadow-emerald transition hover:bg-emeraldDeep hover:shadow-xl hover:scale-[1.01] disabled:opacity-45 disabled:cursor-not-allowed"
+              >
+                <ShoppingBag size={17} />
+                {isOutOfStock ? `Stok Habis (${selectedColor})` : `Tambah ke Keranjang (${selectedColor})`}
+              </button>
+
               <a
                 href={orderUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft px-6 py-3.5 text-xs sm:text-sm font-bold text-pearl shadow-emerald transition hover:bg-emeraldDeep hover:shadow-xl hover:scale-[1.01]"
+                className="flex w-full items-center justify-center gap-2 rounded-full border border-goldMuted/40 bg-white px-6 py-2.5 text-xs font-bold text-emeraldInk transition hover:bg-pearlWarm"
               >
-                <MessageCircle size={17} />
-                Pesan via WhatsApp {appliedPromo ? `(Kupon: ${appliedPromo.code})` : `(${selectedColor})`}
+                <MessageCircle size={15} />
+                Atau Tanya Langsung via WhatsApp {appliedPromo ? `(Kupon: ${appliedPromo.code})` : ''}
               </a>
             </div>
           </div>

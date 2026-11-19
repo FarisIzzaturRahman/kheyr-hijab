@@ -2,7 +2,7 @@ import { CreditCard, Grid, Instagram, Mail, MapPin, MessageCircle, Package, Shop
 import { safeUrl, useStore } from '../context/StoreContext';
 import { navItems } from '../data/content';
 
-export default function Footer({ currentView = 'home', onNavigateToCatalog, onNavigateToHome }) {
+export default function Footer({ currentView = 'home', onNavigateToCatalog, onNavigateToHome, onOpenTrackOrder }) {
   const { brand, waLinks, products } = useStore();
   const year = new Date().getFullYear();
   const instagramUrl = safeUrl(brand.instagram, 'https://instagram.com/kheyr.hijab');
@@ -86,6 +86,13 @@ export default function Footer({ currentView = 'home', onNavigateToCatalog, onNa
             >
               <Grid size={14} />
               E-Katalog Lengkap ({products.length} Koleksi)
+            </button>
+            <button
+              type="button"
+              onClick={onOpenTrackOrder}
+              className="text-left text-sm text-pearl/70 transition hover:text-champagne"
+            >
+              Lacak Pesanan
             </button>
             <a href="#kontak" className="text-sm text-pearl/70 transition hover:text-champagne">
               Kontak & Pemesanan

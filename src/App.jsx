@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import About from './components/About';
 import Advantages from './components/Advantages';
 import BackToTop from './components/BackToTop';
+import CartDrawer from './components/CartDrawer';
 import Collections from './components/Collections';
 import Faq from './components/Faq';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
@@ -10,6 +11,7 @@ import Header from './components/Header';
 import Hero from './components/Hero';
 import ScrollProgress from './components/ScrollProgress';
 import Testimonials from './components/Testimonials';
+import TrackOrderModal from './components/TrackOrderModal';
 import { StoreProvider } from './context/StoreContext';
 import useScrollExperience from './hooks/useScrollExperience';
 
@@ -38,6 +40,7 @@ function getViewFromLocation() {
 function MainApp() {
   const [currentView, setCurrentView] = useState(getViewFromLocation);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [trackOrderOpen, setTrackOrderOpen] = useState(false);
   const { activeSection, showFloatingCta } = useScrollExperience(currentView);
 
   const navigateToCatalog = useCallback(() => {
@@ -85,6 +88,7 @@ function MainApp() {
         currentView={currentView}
         onNavigateToCatalog={navigateToCatalog}
         onNavigateToHome={navigateToHome}
+        onOpenTrackOrder={() => setTrackOrderOpen(true)}
         onMenuOpenChange={setMobileMenuOpen}
       />
 
@@ -107,7 +111,10 @@ function MainApp() {
         currentView={currentView}
         onNavigateToCatalog={navigateToCatalog}
         onNavigateToHome={navigateToHome}
+        onOpenTrackOrder={() => setTrackOrderOpen(true)}
       />
+      <CartDrawer />
+      <TrackOrderModal open={trackOrderOpen} onClose={() => setTrackOrderOpen(false)} />
       <BackToTop />
       <FloatingWhatsApp visible={showFloatingCta && !mobileMenuOpen} />
     </>

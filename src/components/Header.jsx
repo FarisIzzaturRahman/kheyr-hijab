@@ -1,4 +1,4 @@
-import { ArrowRight, Grid, Menu, MessageCircle, X } from 'lucide-react';
+import { Grid, Menu, MessageCircle, PackageSearch, ShoppingBag, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { navItems } from '../data/content';
@@ -8,9 +8,10 @@ export default function Header({
   currentView = 'home',
   onNavigateToCatalog,
   onNavigateToHome,
+  onOpenTrackOrder,
   onMenuOpenChange
 }) {
-  const { brand, waLinks, products, promoBanner } = useStore();
+  const { brand, waLinks, products, promoBanner, cartCount, setIsCartOpen } = useStore();
   const [open, setOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -135,28 +136,70 @@ export default function Header({
           </button>
         </div>
 
-        {/* Desktop CTA */}
-        <a
-          href={waLinks.ask}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hidden items-center gap-2 rounded-full border border-champagne/60 bg-champagne/10 px-5 py-2.5 text-sm font-semibold text-pearl transition hover:bg-champagne hover:text-emeraldInk hover:shadow-soft lg:inline-flex"
-        >
-          <MessageCircle size={16} />
-          Order via WhatsApp
-          <ArrowRight size={16} />
-        </a>
+        {/* Desktop Actions: Track Order + Cart + WhatsApp */}
+        <div className="hidden items-center gap-2.5 lg:flex">
+          <button
+            type="button"
+            onClick={onOpenTrackOrder}
+            className="inline-flex items-center gap-1.5 rounded-full border border-champagne/30 px-3.5 py-2 text-xs font-semibold text-pearl/85 transition hover:border-champagne hover:text-champagne"
+          >
+            <PackageSearch size={15} />
+            Lacak
+          </button>
 
-        {/* Mobile Hamburger Toggle */}
-        <button
-          type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-champagne/30 text-champagne transition hover:bg-champagne/15 lg:hidden"
-          aria-label={open ? 'Tutup navigasi' : 'Buka navigasi'}
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </button>
+          <button
+            type="button"
+            onClick={() => setIsCartOpen(true)}
+            aria-label={`Buka keranjang (${cartCount} item)`}
+            className="relative inline-flex items-center gap-1.5 rounded-full bg-champagne px-4 py-2 text-xs font-bold text-emeraldInk shadow-sm transition hover:bg-pearl"
+          >
+            <ShoppingBag size={15} />
+            <span>Keranjang</span>
+            {cartCount > 0 && (
+              <span className="ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emeraldInk px-1.5 text-[10px] font-bold text-champagne">
+                {cartCount}
+              </span>
+            )}
+          </button>
+
+          <a
+            href={waLinks.ask}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Order via WhatsApp"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-champagne/50 bg-champagne/10 text-pearl transition hover:bg-champagne hover:text-emeraldInk"
+            title="Chat Admin via WhatsApp"
+          >
+            <MessageCircle size={16} />
+          </a>
+        </div>
+
+        {/* Mobile Actions: Cart + Hamburger */}
+        <div className="flex items-center gap-2 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setIsCartOpen(true)}
+            aria-label={`Buka keranjang (${cartCount} item)`}
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-champagne/40 bg-champagne/15 text-champagne"
+          >
+            <ShoppingBag size={18} />
+            {cartCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-roseClay px-1 text-[10px] font-bold text-white shadow-sm">
+                {cartCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-champagne/30 text-champagne transition hover:bg-champagne/15"
+            aria-label={open ? 'Tutup navigasi' : 'Buka navigasi'}
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </nav>
 
       {/* Mobile Drawer */}
@@ -204,6 +247,18 @@ export default function Header({
                 Buka E-Katalog Lengkap
               </span>
               <span className="rounded-full bg-roseClay px-2 py-0.5 text-xs text-white">{products.length} Koleksi</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu();
+                onOpenTrackOrder?.();
+              }}
+              className="mt-1 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-pearl/85 hover:bg-pearl/10 transition"
+            >
+              <PackageSearch size={16} />
+              Lacak Pesanan
             </button>
 
             <a

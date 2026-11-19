@@ -35,12 +35,13 @@ const emptyProductForm = {
 };
 
 export default function ProductsTab({ showToast }) {
-  const { isSupabaseConfigured, products, addProduct, updateProduct, deleteProduct, uploadProductImage } = useStore();
+  const { isSupabaseConfigured, products, getVariantStock, addProduct, updateProduct, deleteProduct, uploadProductImage } = useStore();
   const [productSearch, setProductSearch] = useState('');
   const [selectedCatFilter, setSelectedCatFilter] = useState('Semua');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [productForm, setProductForm] = useState(emptyProductForm);
+  const [variantStocks, setVariantStocks] = useState({});
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const handleImageUpload = async (e) => {
@@ -79,12 +80,23 @@ export default function ProductsTab({ showToast }) {
   const openCreateModal = () => {
     setEditingProduct(null);
     setProductForm(emptyProductForm);
+    const initialStocks = {};
+    emptyProductForm.colors.forEach((c) => {
+      initialStocks[c] = 20;
+    });
+    setVariantStocks(initialStocks);
     setIsModalOpen(true);
   };
 
   const openEditModal = (product) => {
     setEditingProduct(product);
-    setProductForm({ ...product, colors: product.colors || ['Emerald', 'Sage'] });
+    const cols = product.colors || ['Emerald', 'Sage'];
+    setProductForm({ ...product, colors: cols });
+    const stockMap = {};
+    cols.forEach((c) => {
+      stockMap[c] = getVariantStock(product.id, c);
+    });
+    setVariantStocks(stockMap);
     setIsModalOpen(true);
   };
 
@@ -104,12 +116,16 @@ export default function ProductsTab({ showToast }) {
     }
 
     const payload = { ...productForm, numericPrice: numeric };
+    const cleanStocks = {};
+    (productForm.colors || []).forEach((c) => {
+      cleanStocks[c] = Math.max(0, parseInt(variantStocks[c], 10) || 0);
+    });
 
     if (editingProduct) {
-      updateProduct(editingProduct.id, payload);
-      showToast(`Produk "${productForm.name}" berhasil diperbarui!`);
+      updateProduct(editingProduct.id, payload, cleanStocks);
+      showToast(`Produk "${productForm.name}" & stok berhasil diperbarui!`);
     } else {
-      addProduct(payload);
+      addProduct(payload, cleanStocks);
       showToast(`Produk baru "${productForm.name}" berhasil ditambahkan!`);
     }
 
@@ -138,6 +154,7 @@ export default function ProductsTab({ showToast }) {
       setProductForm({ ...productForm, colors: current.filter((c) => c !== colorName) });
     } else {
       setProductForm({ ...productForm, colors: [...current, colorName] });
+      setVariantStocks((prev) => ({ ...prev, [colorName]: prev[colorName] ?? 20 }));
     }
   };
 
@@ -234,15 +251,23 @@ export default function ProductsTab({ showToast }) {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-1.5">
-                      {p.colors?.map((c) => (
-                        <span
-                          key={c}
-                          className="h-4 w-4 rounded-full border border-ink/20 shadow-xs"
-                          style={{ backgroundColor: colorMap[c] || '#ded3c2' }}
-                          title={c}
-                        />
-                      ))}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {p.colors?.map((c) => {
+                        const st = getVariantStock(p.id, c);
+                        return (
+                          <span
+                            key={c}
+                            className="inline-flex items-center gap-1 rounded-full border border-ink/15 bg-pearlWarm/60 px-2 py-0.5 text-[10px] font-bold text-ink"
+                            title={`${c}: ${st} pcs`}
+                          >
+                            <span
+                              className="h-2.5 w-2.5 rounded-full border border-black/15"
+                              style={{ backgroundColor: colorMap[c] || '#ded3c2' }}
+                            />
+                            <span className={st <= 0 ? 'text-roseClay' : ''}>{st}</span>
+                          </span>
+                        );
+                      })}
                     </div>
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -508,6 +533,38 @@ export default function ProductsTab({ showToast }) {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Stock per Selected Color Variant */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-ink/70 mb-1.5">
+                  Stok per Varian Warna (pcs)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 rounded-2xl border border-goldMuted/20 bg-white p-3.5">
+                  {(productForm.colors || []).map((colorName) => (
+                    <div key={colorName} className="flex items-center justify-between gap-2 rounded-xl border border-goldMuted/20 bg-pearlWarm/40 px-3 py-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink truncate">
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full border border-black/15"
+                          style={{ backgroundColor: colorMap[colorName] || '#ded3c2' }}
+                        />
+                        {colorName}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={variantStocks[colorName] ?? 0}
+                        onChange={(e) =>
+                          setVariantStocks((prev) => ({
+                            ...prev,
+                            [colorName]: e.target.value
+                          }))
+                        }
+                        className="w-16 rounded-lg border border-goldMuted/30 bg-white px-2 py-1 text-right text-xs font-bold text-ink focus:border-emeraldSoft focus:outline-none"
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
 

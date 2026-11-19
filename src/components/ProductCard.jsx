@@ -1,17 +1,24 @@
-import { Eye, MessageCircle } from 'lucide-react';
+import { Eye, ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
-import { safeUrl } from '../context/StoreContext';
+import { safeUrl, useStore } from '../context/StoreContext';
 
 export default function ProductCard({
   product,
   index,
   onQuickView,
   colorMap,
-  waLinks,
   aspectClass = 'aspect-[4/5]',
   showCatalogCategory = false
 }) {
+  const { getVariantStock, addToCart, setIsCartOpen } = useStore();
   const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || 'Emerald');
+  const stock = getVariantStock(product.id, selectedColor);
+  const isOutOfStock = stock <= 0;
+
+  const handleAddToCart = () => {
+    const res = addToCart(product, selectedColor, 1);
+    if (res.ok) setIsCartOpen(true);
+  };
 
   return (
     <article
@@ -28,12 +35,14 @@ export default function ProductCard({
           <img
             src={safeUrl(product.image, '/images/product-daily-voile.jpg')}
             alt={`${product.name} - ${product.category}`}
-            className="h-full w-full object-cover object-center transition duration-700 group-hover:scale-105"
+            className={`h-full w-full object-cover object-center transition duration-700 group-hover:scale-105 ${
+              isOutOfStock ? 'grayscale opacity-70' : ''
+            }`}
             loading="lazy"
             decoding="async"
           />
           <span className="absolute left-3 top-3 rounded-full bg-roseClay px-3 py-1 text-xs font-bold text-white shadow-sm">
-            {product.label}
+            {isOutOfStock ? 'Stok Habis' : product.label}
           </span>
           <div className="absolute inset-0 flex items-center justify-center bg-emeraldInk/40 opacity-0 backdrop-blur-[2px] transition duration-300 group-hover:opacity-100">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-pearlWarm/95 px-4 py-2 text-xs font-bold text-emeraldInk shadow-lg transition-transform duration-300 group-hover:scale-105">
@@ -61,12 +70,16 @@ export default function ProductCard({
           <p className="mt-2 text-xs leading-relaxed text-ink/65 line-clamp-2">{product.description}</p>
 
           <div className="mt-4 flex items-center justify-between border-t border-goldMuted/15 pt-3">
-            <span className="text-xs font-semibold text-ink/70">
-              Warna: <span className="font-bold text-ink">{selectedColor}</span>
-            </span>
+            <div className="text-xs font-semibold text-ink/70">
+              <span>{selectedColor}</span>
+              <span className={`ml-1.5 text-[11px] font-bold ${isOutOfStock ? 'text-roseClay' : stock <= 5 ? 'text-amber-600' : 'text-emeraldSoft'}`}>
+                ({isOutOfStock ? 'Habis' : `Stok ${stock}`})
+              </span>
+            </div>
             <div className="flex items-center gap-1.5" aria-label={`Pilihan warna ${product.name}`}>
               {product.colors?.map((color) => {
                 const isSelected = selectedColor === color;
+                const colorStock = getVariantStock(product.id, color);
                 return (
                   <button
                     key={color}
@@ -79,9 +92,9 @@ export default function ProductCard({
                       isSelected
                         ? 'border-goldMuted ring-2 ring-champagne scale-110'
                         : 'border-ink/15 hover:scale-105'
-                    }`}
+                    } ${colorStock <= 0 ? 'opacity-40' : ''}`}
                     style={{ backgroundColor: colorMap[color] || '#ded3c2' }}
-                    title={color}
+                    title={`${color} (${colorStock <= 0 ? 'Habis' : `Stok ${colorStock}`})`}
                     aria-label={`Pilih warna ${color}`}
                   />
                 );
@@ -92,15 +105,15 @@ export default function ProductCard({
       </div>
 
       <div className="flex flex-col gap-2 p-5 pt-0">
-        <a
-          href={waLinks.forProduct(product.name, selectedColor)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft px-4 py-2.5 text-xs sm:text-sm font-bold text-pearl shadow-sm transition hover:bg-emeraldDeep"
+        <button
+          type="button"
+          disabled={isOutOfStock}
+          onClick={handleAddToCart}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft px-4 py-2.5 text-xs sm:text-sm font-bold text-pearl shadow-sm transition hover:bg-emeraldDeep disabled:opacity-45 disabled:cursor-not-allowed"
         >
-          <MessageCircle size={15} />
-          Pesan ({selectedColor})
-        </a>
+          <ShoppingBag size={15} />
+          {isOutOfStock ? `Habis (${selectedColor})` : `+ Keranjang (${selectedColor})`}
+        </button>
 
         <button
           type="button"

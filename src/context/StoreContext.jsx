@@ -15,10 +15,12 @@ const STORAGE_KEYS = {
   PROMO: 'kheyr_promo_data_v1',
   PROMO_CODES: 'kheyr_promo_codes_v1',
   PIN: 'kheyr_admin_pin_v1',
-  AUDIT_LOGS: 'kheyr_audit_logs_v1'
+  AUDIT_LOGS: 'kheyr_audit_logs_v1',
+  CART: 'kheyr_cart_v1'
 };
 
 const MAX_AUDIT_LOGS = 200;
+const DEFAULT_VARIANT_STOCK = 20;
 
 export const defaultPromo = {
   enabled: true,
@@ -65,6 +67,15 @@ export const defaultPromoCodes = [
   }
 ];
 
+export const ORDER_STATUS_LABELS = {
+  pending_payment: 'Menunggu Bayar',
+  paid: 'Dibayar',
+  packed: 'Dikemas',
+  shipped: 'Dikirim',
+  completed: 'Selesai',
+  cancelled: 'Dibatalkan'
+};
+
 /**
  * Only allow safe HTTP(S) or root-relative URLs to prevent javascript:/data: injection.
  */
@@ -94,8 +105,8 @@ function readStorage(key, fallback) {
   return fallback;
 }
 
-function writeStorage(key, value) {
-  if (isSupabaseConfigured) return;
+function writeStorage(key, value, force = false) {
+  if (isSupabaseConfigured && !force) return;
   try {
     localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
   } catch {
@@ -103,7 +114,37 @@ function writeStorage(key, value) {
   }
 }
 
-// DB row <-> frontend shape mappers
+function buildDefaultVariantsMap(productList) {
+  const map = {};
+  productList.forEach((p) => {
+    map[p.id] = {};
+    (p.colors || []).forEach((color) => {
+      map[p.id][color] = {
+        id: `${p.id}-${color}`,
+        stock: DEFAULT_VARIANT_STOCK,
+        skuCode: `${p.id}-${color}`.toUpperCase().replace(/[^A-Z0-9]+/g, '-'),
+        isActive: true
+      };
+    });
+  });
+  return map;
+}
+
+function dbRowsToVariantsMap(rows) {
+  const map = {};
+  rows.forEach((row) => {
+    if (!map[row.product_id]) map[row.product_id] = {};
+    map[row.product_id][row.color] = {
+      id: row.id,
+      stock: row.stock,
+      skuCode: row.sku_code || '',
+      weightGrams: row.weight_grams ?? 120,
+      isActive: row.is_active !== false
+    };
+  });
+  return map;
+}
+
 function dbToProduct(row) {
   return {
     id: row.id,
@@ -186,6 +227,36 @@ function dbToAudit(row) {
   };
 }
 
+function dbToOrder(row) {
+  return {
+    id: row.id,
+    orderCode: row.order_code,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone,
+    shippingAddress: row.shipping_address,
+    notes: row.notes || '',
+    subtotal: row.subtotal,
+    discountAmount: row.discount_amount || 0,
+    promoCode: row.promo_code || null,
+    totalAmount: row.total_amount,
+    status: row.status,
+    courier: row.courier || '',
+    trackingNumber: row.tracking_number || '',
+    createdAt: row.created_at,
+    items: Array.isArray(row.order_items)
+      ? row.order_items.map((item) => ({
+          id: item.id,
+          productId: item.product_id,
+          productName: item.product_name,
+          color: item.color,
+          unitPrice: item.unit_price,
+          quantity: item.quantity,
+          lineTotal: item.line_total
+        }))
+      : []
+  };
+}
+
 function sanitizeProduct(raw, index) {
   if (!raw || typeof raw !== 'object') return null;
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
@@ -250,6 +321,7 @@ export function StoreProvider({ children }) {
   const [products, setProducts] = useState(() =>
     isSupabaseConfigured ? defaultProducts : readStorage(STORAGE_KEYS.PRODUCTS, defaultProducts)
   );
+  const [variants, setVariants] = useState(() => buildDefaultVariantsMap(defaultProducts));
   const [brand, setBrand] = useState(() =>
     isSupabaseConfigured ? defaultBrand : readStorage(STORAGE_KEYS.BRAND, defaultBrand)
   );
@@ -262,6 +334,14 @@ export function StoreProvider({ children }) {
   const [auditLogs, setAuditLogs] = useState(() =>
     isSupabaseConfigured ? [] : readStorage(STORAGE_KEYS.AUDIT_LOGS, [])
   );
+  const [orders, setOrders] = useState([]);
+
+  // Cart state (always persisted in browser localStorage for shopper convenience)
+  const [cart, setCart] = useState(() => {
+    const saved = readStorage(STORAGE_KEYS.CART, []);
+    return Array.isArray(saved) ? saved : [];
+  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   // Supabase Auth state
   const [authUser, setAuthUser] = useState(null);
@@ -283,14 +363,18 @@ export function StoreProvider({ children }) {
   // Load initial public data from Supabase
   const refreshPublicData = useCallback(async () => {
     if (!supabase) return;
-    const [prodRes, promoRes, settingsRes] = await Promise.all([
+    const [prodRes, variantRes, promoRes, settingsRes] = await Promise.all([
       supabase.from('products').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false }),
+      supabase.from('product_variants').select('*'),
       supabase.from('promo_codes').select('*').order('created_at', { ascending: false }),
       supabase.from('store_settings').select('*').eq('id', 'default').maybeSingle()
     ]);
 
     if (!prodRes.error && Array.isArray(prodRes.data) && prodRes.data.length > 0) {
       setProducts(prodRes.data.map(dbToProduct));
+    }
+    if (!variantRes.error && Array.isArray(variantRes.data)) {
+      setVariants(dbRowsToVariantsMap(variantRes.data));
     }
     if (!promoRes.error && Array.isArray(promoRes.data)) {
       setPromoCodes(promoRes.data.map(dbToPromo));
@@ -322,6 +406,18 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  const refreshOrders = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (!error && Array.isArray(data)) {
+      setOrders(data.map(dbToOrder));
+    }
+  }, []);
+
   const verifyAdminRole = useCallback(
     async (user) => {
       if (!supabase || !user) {
@@ -344,10 +440,11 @@ export function StoreProvider({ children }) {
       if (allowed) {
         refreshPublicData();
         refreshAuditLogs();
+        refreshOrders();
       }
       return allowed;
     },
-    [refreshPublicData, refreshAuditLogs]
+    [refreshPublicData, refreshAuditLogs, refreshOrders]
   );
 
   useEffect(() => {
@@ -372,13 +469,14 @@ export function StoreProvider({ children }) {
     };
   }, [refreshPublicData, verifyAdminRole]);
 
-  // Local fallback persistence (disabled when Supabase is active)
+  // Persistence effects
   useEffect(() => writeStorage(STORAGE_KEYS.PRODUCTS, products), [products]);
   useEffect(() => writeStorage(STORAGE_KEYS.BRAND, brand), [brand]);
   useEffect(() => writeStorage(STORAGE_KEYS.PROMO, promoBanner), [promoBanner]);
   useEffect(() => writeStorage(STORAGE_KEYS.PROMO_CODES, promoCodes), [promoCodes]);
   useEffect(() => writeStorage(STORAGE_KEYS.AUDIT_LOGS, auditLogs), [auditLogs]);
   useEffect(() => writeStorage(STORAGE_KEYS.PIN, adminPin), [adminPin]);
+  useEffect(() => writeStorage(STORAGE_KEYS.CART, cart, true), [cart]);
 
   const recordAudit = useCallback(
     async (action, target, summary, beforeData = null, afterData = null) => {
@@ -416,6 +514,355 @@ export function StoreProvider({ children }) {
     [authUser]
   );
 
+  // Stock helper
+  const getVariantStock = useCallback(
+    (productId, color) => {
+      const entry = variants[productId]?.[color];
+      if (!entry) return DEFAULT_VARIANT_STOCK;
+      return entry.isActive === false ? 0 : Math.max(0, Number(entry.stock) || 0);
+    },
+    [variants]
+  );
+
+  const saveProductVariants = useCallback(
+    async (productId, colorStockMap) => {
+      const entries = Object.entries(colorStockMap);
+      setVariants((prev) => {
+        const nextForProduct = { ...(prev[productId] || {}) };
+        entries.forEach(([color, stock]) => {
+          const cleanStock = Math.max(0, parseInt(stock, 10) || 0);
+          nextForProduct[color] = {
+            ...(nextForProduct[color] || {}),
+            stock: cleanStock,
+            skuCode: `${productId}-${color}`.toUpperCase().replace(/[^A-Z0-9]+/g, '-'),
+            isActive: true
+          };
+        });
+        return { ...prev, [productId]: nextForProduct };
+      });
+
+      if (supabase && entries.length > 0) {
+        const rows = entries.map(([color, stock]) => ({
+          product_id: productId,
+          color,
+          sku_code: `${productId}-${color}`.toUpperCase().replace(/[^A-Z0-9]+/g, '-'),
+          stock: Math.max(0, parseInt(stock, 10) || 0),
+          is_active: true,
+          updated_at: new Date().toISOString()
+        }));
+
+        const { error } = await supabase
+          .from('product_variants')
+          .upsert(rows, { onConflict: 'product_id,color' });
+
+        if (!error) {
+          recordAudit('STOCK_UPDATE', productId, `Perbarui stok ${entries.length} varian warna`);
+        }
+      }
+    },
+    [recordAudit]
+  );
+
+  // Cart Actions
+  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + (item.quantity || 0), 0), [cart]);
+
+  const addToCart = useCallback(
+    (product, color, quantity = 1) => {
+      const chosenColor = color || product.colors?.[0] || 'Emerald';
+      const availableStock = getVariantStock(product.id, chosenColor);
+      if (availableStock <= 0) {
+        return { ok: false, error: 'Maaf, stok warna ini sedang habis.' };
+      }
+
+      setCart((prev) => {
+        const idx = prev.findIndex((item) => item.productId === product.id && item.color === chosenColor);
+        if (idx >= 0) {
+          const nextQty = Math.min(availableStock, prev[idx].quantity + quantity);
+          return prev.map((item, i) => (i === idx ? { ...item, quantity: nextQty } : item));
+        }
+        return [
+          ...prev,
+          {
+            productId: product.id,
+            color: chosenColor,
+            quantity: Math.min(availableStock, Math.max(1, quantity))
+          }
+        ];
+      });
+      return { ok: true };
+    },
+    [getVariantStock]
+  );
+
+  const updateCartQuantity = useCallback(
+    (productId, color, quantity) => {
+      if (quantity <= 0) {
+        setCart((prev) => prev.filter((item) => !(item.productId === productId && item.color === color)));
+        return;
+      }
+      const maxStock = getVariantStock(productId, color);
+      setCart((prev) =>
+        prev.map((item) =>
+          item.productId === productId && item.color === color
+            ? { ...item, quantity: Math.min(Math.max(1, maxStock), quantity) }
+            : item
+        )
+      );
+    },
+    [getVariantStock]
+  );
+
+  const removeFromCart = useCallback((productId, color) => {
+    setCart((prev) => prev.filter((item) => !(item.productId === productId && item.color === color)));
+  }, []);
+
+  const clearCart = useCallback(() => {
+    setCart([]);
+  }, []);
+
+  // Cart-level promo calculator
+  const calculateCartPromo = useCallback(
+    (promoCodeObj, enrichedItems) => {
+      if (!promoCodeObj || !promoCodeObj.isActive) {
+        return { valid: false, discountAmount: 0, message: 'Kode promo tidak aktif.' };
+      }
+      const subtotal = enrichedItems.reduce((sum, item) => sum + item.lineTotal, 0);
+      const eligibleSubtotal =
+        promoCodeObj.applicableTo === 'specific'
+          ? enrichedItems
+              .filter((item) => promoCodeObj.applicableProductIds?.includes(item.productId))
+              .reduce((sum, item) => sum + item.lineTotal, 0)
+          : subtotal;
+
+      if (eligibleSubtotal <= 0) {
+        return { valid: false, discountAmount: 0, message: `Kode "${promoCodeObj.code}" tidak berlaku untuk produk di keranjang.` };
+      }
+      if (promoCodeObj.minPurchase > 0 && eligibleSubtotal < promoCodeObj.minPurchase) {
+        return {
+          valid: false,
+          discountAmount: 0,
+          message: `Minimal belanja Rp ${promoCodeObj.minPurchase.toLocaleString('id-ID')} untuk kode "${promoCodeObj.code}".`
+        };
+      }
+
+      let discountAmount = 0;
+      if (promoCodeObj.discountType === 'percentage') {
+        const pct = Math.min(100, Math.max(0, Number(promoCodeObj.discountValue) || 0));
+        discountAmount = Math.round((eligibleSubtotal * pct) / 100);
+        if (promoCodeObj.maxDiscount > 0 && discountAmount > promoCodeObj.maxDiscount) {
+          discountAmount = promoCodeObj.maxDiscount;
+        }
+      } else {
+        discountAmount = Math.max(0, Number(promoCodeObj.discountValue) || 0);
+        if (promoCodeObj.maxDiscount > 0 && discountAmount > promoCodeObj.maxDiscount) {
+          discountAmount = promoCodeObj.maxDiscount;
+        }
+      }
+      if (discountAmount > eligibleSubtotal) discountAmount = eligibleSubtotal;
+
+      return {
+        valid: true,
+        code: promoCodeObj.code,
+        discountAmount,
+        finalTotal: Math.max(0, subtotal - discountAmount),
+        message: `Hemat Rp ${discountAmount.toLocaleString('id-ID')}!`
+      };
+    },
+    []
+  );
+
+  // Guest Checkout & Order Tracking
+  const placeGuestOrder = useCallback(
+    async ({ customerName, customerPhone, shippingAddress, notes = '', promoCode = '' }) => {
+      if (cart.length === 0) {
+        return { ok: false, error: 'Keranjang belanja masih kosong.' };
+      }
+
+      if (supabase) {
+        const { data, error } = await supabase.rpc('create_guest_order', {
+          p_customer_name: customerName,
+          p_customer_phone: customerPhone,
+          p_shipping_address: shippingAddress,
+          p_notes: notes,
+          p_promo_code: promoCode || null,
+          p_items: cart.map((item) => ({
+            productId: item.productId,
+            color: item.color,
+            quantity: item.quantity
+          }))
+        });
+
+        if (error) {
+          return { ok: false, error: error.message };
+        }
+
+        clearCart();
+        refreshPublicData();
+        return { ok: true, order: data };
+      }
+
+      // Local / test-mode fallback
+      const enriched = [];
+      for (const item of cart) {
+        const product = products.find((p) => p.id === item.productId);
+        if (!product) return { ok: false, error: `Produk tidak ditemukan: ${item.productId}` };
+        const stock = getVariantStock(product.id, item.color);
+        if (stock < item.quantity) {
+          return { ok: false, error: `Stok tidak mencukupi untuk ${product.name} warna ${item.color}.` };
+        }
+        const unitPrice = product.numericPrice || 0;
+        enriched.push({
+          productId: product.id,
+          productName: product.name,
+          color: item.color,
+          unitPrice,
+          quantity: item.quantity,
+          lineTotal: unitPrice * item.quantity
+        });
+      }
+
+      const subtotal = enriched.reduce((sum, i) => sum + i.lineTotal, 0);
+      let discountAmount = 0;
+      let appliedCode = null;
+      if (promoCode && promoCode.trim()) {
+        const foundPromo = promoCodes.find((p) => p.code.toUpperCase() === promoCode.trim().toUpperCase());
+        if (foundPromo) {
+          const calc = calculateCartPromo(foundPromo, enriched);
+          if (calc.valid) {
+            discountAmount = calc.discountAmount;
+            appliedCode = foundPromo.code;
+          }
+        }
+      }
+
+      // Decrement local variant stocks
+      setVariants((prev) => {
+        const next = { ...prev };
+        enriched.forEach((item) => {
+          const prodMap = { ...(next[item.productId] || {}) };
+          const cur = prodMap[item.color] || { stock: DEFAULT_VARIANT_STOCK, isActive: true };
+          prodMap[item.color] = { ...cur, stock: Math.max(0, cur.stock - item.quantity) };
+          next[item.productId] = prodMap;
+        });
+        return next;
+      });
+
+      const orderCode = `KHY-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const newOrder = {
+        id: `ord-${Date.now()}`,
+        orderCode,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        shippingAddress: shippingAddress.trim(),
+        notes: notes.trim(),
+        subtotal,
+        discountAmount,
+        promoCode: appliedCode,
+        totalAmount: Math.max(0, subtotal - discountAmount),
+        status: 'pending_payment',
+        courier: '',
+        trackingNumber: '',
+        createdAt: new Date().toISOString(),
+        items: enriched
+      };
+
+      setOrders((prev) => [newOrder, ...prev]);
+      clearCart();
+      return { ok: true, order: newOrder };
+    },
+    [cart, products, promoCodes, getVariantStock, calculateCartPromo, clearCart, refreshPublicData]
+  );
+
+  const trackGuestOrder = useCallback(
+    async (orderCode, phone) => {
+      if (supabase) {
+        const { data, error } = await supabase.rpc('track_order', {
+          p_order_code: orderCode,
+          p_phone: phone
+        });
+        if (error) return { ok: false, error: error.message };
+        if (!data) return { ok: false, error: 'Pesanan tidak ditemukan. Periksa Kode Order & No. WhatsApp.' };
+        return { ok: true, order: data };
+      }
+
+      const cleanDigits = (phone || '').replace(/\D/g, '').slice(-8);
+      const found = orders.find(
+        (o) =>
+          o.orderCode.toUpperCase() === (orderCode || '').trim().toUpperCase() &&
+          o.customerPhone.replace(/\D/g, '').slice(-8) === cleanDigits
+      );
+      if (!found) return { ok: false, error: 'Pesanan tidak ditemukan. Periksa Kode Order & No. WhatsApp.' };
+      return { ok: true, order: found };
+    },
+    [orders]
+  );
+
+  // Admin Order Management
+  const updateOrderStatus = useCallback(
+    async (orderId, { status, courier, trackingNumber }) => {
+      const target = orders.find((o) => o.id === orderId);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                ...(status !== undefined ? { status } : {}),
+                ...(courier !== undefined ? { courier } : {}),
+                ...(trackingNumber !== undefined ? { trackingNumber } : {})
+              }
+            : o
+        )
+      );
+
+      if (supabase) {
+        const payload = {
+          updated_at: new Date().toISOString(),
+          ...(status !== undefined ? { status } : {}),
+          ...(courier !== undefined ? { courier } : {}),
+          ...(trackingNumber !== undefined ? { tracking_number: trackingNumber } : {})
+        };
+        const { error } = await supabase.from('orders').update(payload).eq('id', orderId);
+        if (error) return { ok: false, error: error.message };
+      }
+
+      recordAudit(
+        'ORDER_UPDATE',
+        target?.orderCode || orderId,
+        `Status: ${ORDER_STATUS_LABELS[status] || status}${trackingNumber ? ` | Resi: ${trackingNumber}` : ''}`
+      );
+      return { ok: true };
+    },
+    [orders, recordAudit]
+  );
+
+  const cancelOrder = useCallback(
+    async (orderId) => {
+      if (supabase) {
+        const { error } = await supabase.rpc('cancel_order_and_restore_stock', { p_order_id: orderId });
+        if (error) return { ok: false, error: error.message };
+        await Promise.all([refreshOrders(), refreshPublicData(), refreshAuditLogs()]);
+        return { ok: true };
+      }
+
+      const target = orders.find((o) => o.id === orderId);
+      if (!target || target.status === 'cancelled') return { ok: true };
+      setVariants((prev) => {
+        const next = { ...prev };
+        target.items.forEach((item) => {
+          const prodMap = { ...(next[item.productId] || {}) };
+          const cur = prodMap[item.color] || { stock: 0, isActive: true };
+          prodMap[item.color] = { ...cur, stock: cur.stock + item.quantity };
+          next[item.productId] = prodMap;
+        });
+        return next;
+      });
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: 'cancelled' } : o)));
+      recordAudit('ORDER_CANCEL', target.orderCode, 'Batalkan pesanan & kembalikan stok otomatis');
+      return { ok: true };
+    },
+    [orders, refreshOrders, refreshPublicData, refreshAuditLogs, recordAudit]
+  );
+
   // Supabase Auth Actions
   const signInAdmin = useCallback(
     async (email, password) => {
@@ -424,9 +871,7 @@ export function StoreProvider({ children }) {
         email: email.trim(),
         password
       });
-      if (error) {
-        return { ok: false, error: error.message };
-      }
+      if (error) return { ok: false, error: error.message };
       const allowed = await verifyAdminRole(data.user);
       if (!allowed) {
         await supabase.auth.signOut();
@@ -438,9 +883,7 @@ export function StoreProvider({ children }) {
   );
 
   const signOutAdmin = useCallback(async () => {
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
+    if (supabase) await supabase.auth.signOut();
     setAuthUser(null);
     setIsAdmin(false);
   }, []);
@@ -463,9 +906,7 @@ export function StoreProvider({ children }) {
   // Supabase Storage Image Upload
   const uploadProductImage = useCallback(
     async (file) => {
-      if (!supabase) {
-        return { ok: false, error: 'Upload foto memerlukan koneksi Supabase Storage.' };
-      }
+      if (!supabase) return { ok: false, error: 'Upload foto memerlukan koneksi Supabase Storage.' };
       if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
         return { ok: false, error: 'Format file harus JPG, PNG, atau WebP.' };
       }
@@ -485,9 +926,7 @@ export function StoreProvider({ children }) {
         .from('product-images')
         .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
-      if (uploadError) {
-        return { ok: false, error: uploadError.message };
-      }
+      if (uploadError) return { ok: false, error: uploadError.message };
 
       const { data } = supabase.storage.from('product-images').getPublicUrl(filePath);
       await recordAudit('IMAGE_UPLOAD', filePath, `Upload foto produk (${Math.round(file.size / 1024)} KB)`);
@@ -515,13 +954,24 @@ export function StoreProvider({ children }) {
         return getUrl(
           `Assalamu alaikum KHEYR, saya ingin order produk ${productName}${colorText}${promoText}. Mohon info ketersediaan stok & nomor rekeningnya. Terima kasih!`
         );
+      },
+      forOrder: (order) => {
+        const lines = (order.items || [])
+          .map((i) => `- ${i.productName} (${i.color}) x${i.quantity} = Rp ${i.lineTotal.toLocaleString('id-ID')}`)
+          .join('\n');
+        const promoLine = order.promoCode
+          ? `\nPromo (${order.promoCode}): -Rp ${order.discountAmount.toLocaleString('id-ID')}`
+          : '';
+        return getUrl(
+          `Assalamu alaikum KHEYR, saya sudah membuat pesanan:\n\nKode Order: ${order.orderCode}\n${lines}${promoLine}\nTotal: Rp ${order.totalAmount.toLocaleString('id-ID')}\n\nMohon info nomor rekening & ongkir untuk pembayaran. Terima kasih!`
+        );
       }
     };
   }, [brand.whatsapp]);
 
   // Mutation Actions for Products
   const addProduct = useCallback(
-    (newProduct) => {
+    (newProduct, initialStocks = null) => {
       const id =
         newProduct.id ||
         newProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
@@ -533,25 +983,32 @@ export function StoreProvider({ children }) {
 
       setProducts((prev) => [productWithId, ...prev]);
 
+      const stockMap = {};
+      (productWithId.colors || ['Emerald']).forEach((color) => {
+        stockMap[color] = initialStocks?.[color] ?? DEFAULT_VARIANT_STOCK;
+      });
+
       if (supabase) {
         supabase
           .from('products')
           .insert(productToDb(productWithId, 0))
           .then(({ error }) => {
             if (!error) {
+              saveProductVariants(id, stockMap);
               recordAudit('PRODUCT_CREATE', productWithId.name, `Tambah produk (${productWithId.price})`, null, productWithId);
             }
           });
       } else {
+        saveProductVariants(id, stockMap);
         recordAudit('PRODUCT_CREATE', productWithId.name, `Tambah produk (${productWithId.price})`);
       }
       return productWithId;
     },
-    [recordAudit]
+    [recordAudit, saveProductVariants]
   );
 
   const updateProduct = useCallback(
-    (id, updatedFields) => {
+    (id, updatedFields, updatedStocks = null) => {
       const sanitized = {
         ...updatedFields,
         ...(updatedFields.image !== undefined
@@ -577,14 +1034,16 @@ export function StoreProvider({ children }) {
           .eq('id', id)
           .then(({ error }) => {
             if (!error) {
+              if (updatedStocks) saveProductVariants(id, updatedStocks);
               recordAudit('PRODUCT_UPDATE', mergedItem.name, `Update produk (${mergedItem.price})`, beforeItem, mergedItem);
             }
           });
       } else {
+        if (updatedStocks) saveProductVariants(id, updatedStocks);
         recordAudit('PRODUCT_UPDATE', sanitized.name || id, `Update produk (${sanitized.price || '-'})`);
       }
     },
-    [recordAudit]
+    [recordAudit, saveProductVariants]
   );
 
   const deleteProduct = useCallback(
@@ -616,12 +1075,8 @@ export function StoreProvider({ children }) {
   const addPromoCode = useCallback(
     (newCode) => {
       const normalizedCode = (newCode.code || '').trim().toUpperCase();
-      if (!normalizedCode) {
-        return { ok: false, error: 'Kode promo tidak boleh kosong.' };
-      }
-
-      const duplicate = promoCodes.some((p) => p.code.toUpperCase() === normalizedCode);
-      if (duplicate) {
+      if (!normalizedCode) return { ok: false, error: 'Kode promo tidak boleh kosong.' };
+      if (promoCodes.some((p) => p.code.toUpperCase() === normalizedCode)) {
         return { ok: false, error: `Kode promo "${normalizedCode}" sudah ada.` };
       }
 
@@ -666,11 +1121,8 @@ export function StoreProvider({ children }) {
   const updatePromoCode = useCallback(
     (id, updatedFields) => {
       const normalizedCode = updatedFields.code ? updatedFields.code.trim().toUpperCase() : undefined;
-      if (normalizedCode) {
-        const duplicate = promoCodes.some((p) => p.id !== id && p.code.toUpperCase() === normalizedCode);
-        if (duplicate) {
-          return { ok: false, error: `Kode promo "${normalizedCode}" sudah digunakan promo lain.` };
-        }
+      if (normalizedCode && promoCodes.some((p) => p.id !== id && p.code.toUpperCase() === normalizedCode)) {
+        return { ok: false, error: `Kode promo "${normalizedCode}" sudah digunakan promo lain.` };
       }
 
       let beforeItem = null;
@@ -825,10 +1277,7 @@ export function StoreProvider({ children }) {
       }
     }
 
-    if (discountAmount > price) {
-      discountAmount = price;
-    }
-
+    if (discountAmount > price) discountAmount = price;
     const finalPrice = Math.max(0, price - discountAmount);
 
     return {
@@ -908,6 +1357,7 @@ export function StoreProvider({ children }) {
 
   const resetToDefaults = useCallback(() => {
     setProducts(defaultProducts);
+    setVariants(buildDefaultVariantsMap(defaultProducts));
     setBrand(defaultBrand);
     setPromoBanner(defaultPromo);
     setPromoCodes(defaultPromoCodes);
@@ -944,7 +1394,7 @@ export function StoreProvider({ children }) {
 
   const exportData = useCallback(() => {
     const backup = {
-      version: '1.2.0',
+      version: '1.3.0',
       exportedAt: new Date().toISOString(),
       brand,
       products,
@@ -1061,6 +1511,24 @@ export function StoreProvider({ children }) {
       uploadProductImage,
       brand,
       products,
+      variants,
+      getVariantStock,
+      saveProductVariants,
+      cart,
+      cartCount,
+      isCartOpen,
+      setIsCartOpen,
+      addToCart,
+      updateCartQuantity,
+      removeFromCart,
+      clearCart,
+      calculateCartPromo,
+      placeGuestOrder,
+      trackGuestOrder,
+      orders,
+      refreshOrders,
+      updateOrderStatus,
+      cancelOrder,
       promoBanner,
       promoCodes,
       auditLogs,
@@ -1092,6 +1560,23 @@ export function StoreProvider({ children }) {
       uploadProductImage,
       brand,
       products,
+      variants,
+      getVariantStock,
+      saveProductVariants,
+      cart,
+      cartCount,
+      isCartOpen,
+      addToCart,
+      updateCartQuantity,
+      removeFromCart,
+      clearCart,
+      calculateCartPromo,
+      placeGuestOrder,
+      trackGuestOrder,
+      orders,
+      refreshOrders,
+      updateOrderStatus,
+      cancelOrder,
       promoBanner,
       promoCodes,
       auditLogs,

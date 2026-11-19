@@ -187,4 +187,47 @@ describe('StoreContext business logic, validation, and audit trail', () => {
     });
     expect(result.current.auditLogs[0].action).toBe('FACTORY_RESET');
   });
+
+  it('handles cart, atomic stock decrement on checkout, order tracking, and stock restore on cancel', async () => {
+    const { result } = renderHook(() => useStore(), { wrapper });
+    const product = result.current.products[0]; // daily-voile (89.000)
+    const color = product.colors[0];
+    const initialStock = result.current.getVariantStock(product.id, color);
+
+    act(() => {
+      result.current.addToCart(product, color, 2);
+    });
+    expect(result.current.cartCount).toBe(2);
+
+    let orderRes;
+    await act(async () => {
+      orderRes = await result.current.placeGuestOrder({
+        customerName: 'Aisyah Test',
+        customerPhone: '081234567890',
+        shippingAddress: 'Jl. Melati No. 10, Jakarta Selatan',
+        promoCode: 'KHEYRHEMAT'
+      });
+    });
+
+    expect(orderRes.ok).toBe(true);
+    expect(orderRes.order.subtotal).toBe(product.numericPrice * 2);
+    expect(orderRes.order.discountAmount).toBe(15000);
+    expect(orderRes.order.totalAmount).toBe(product.numericPrice * 2 - 15000);
+    expect(result.current.cartCount).toBe(0);
+    expect(result.current.getVariantStock(product.id, color)).toBe(initialStock - 2);
+
+    // Track order with code + phone
+    let trackRes;
+    await act(async () => {
+      trackRes = await result.current.trackGuestOrder(orderRes.order.orderCode, '081234567890');
+    });
+    expect(trackRes.ok).toBe(true);
+    expect(trackRes.order.orderCode).toBe(orderRes.order.orderCode);
+
+    // Cancel order restores stock
+    await act(async () => {
+      await result.current.cancelOrder(orderRes.order.id);
+    });
+    expect(result.current.getVariantStock(product.id, color)).toBe(initialStock);
+  });
 });

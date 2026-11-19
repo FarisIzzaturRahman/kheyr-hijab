@@ -8,6 +8,7 @@ import {
   Megaphone,
   Package,
   Settings,
+  ShoppingBag,
   Ticket
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -15,12 +16,13 @@ import { useStore } from '../context/StoreContext';
 import AdminLogin from './admin/AdminLogin';
 import BackupTab from './admin/BackupTab';
 import BannerTab from './admin/BannerTab';
+import OrdersTab from './admin/OrdersTab';
 import ProductsTab from './admin/ProductsTab';
 import PromoCodesTab from './admin/PromoCodesTab';
 import StoreSettingsTab from './admin/StoreSettingsTab';
 
 export default function AdminPortal({ onBackToWebsite }) {
-  const { isSupabaseConfigured, authUser, isAdmin, authLoading, signOutAdmin, products, promoCodes } = useStore();
+  const { isSupabaseConfigured, authUser, isAdmin, authLoading, signOutAdmin, products, promoCodes, orders } = useStore();
 
   const [localAuthenticated, setLocalAuthenticated] = useState(
     () => !isSupabaseConfigured && sessionStorage.getItem('kheyr_admin_auth') === 'true'
@@ -75,7 +77,10 @@ export default function AdminPortal({ onBackToWebsite }) {
     );
   }
 
+  const pendingOrderCount = orders.filter((o) => o.status === 'pending_payment' || o.status === 'paid').length;
+
   const tabs = [
+    { id: 'orders', label: `Pesanan Masuk (${orders.length}${pendingOrderCount ? ` • ${pendingOrderCount} baru` : ''})`, Icon: ShoppingBag },
     { id: 'products', label: `Koleksi Produk (${products.length})`, Icon: Package },
     { id: 'promocodes', label: `Kode Promo & Voucher (${promoCodes.length})`, Icon: Ticket },
     { id: 'store', label: 'Pengaturan Toko & Kontak', Icon: Settings },
@@ -152,6 +157,7 @@ export default function AdminPortal({ onBackToWebsite }) {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+        {activeTab === 'orders' && <OrdersTab showToast={showToast} />}
         {activeTab === 'products' && <ProductsTab showToast={showToast} />}
         {activeTab === 'promocodes' && <PromoCodesTab showToast={showToast} />}
         {activeTab === 'store' && <StoreSettingsTab showToast={showToast} />}
