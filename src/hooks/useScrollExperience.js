@@ -7,7 +7,7 @@ const sectionIds = ['beranda', 'tentang', 'koleksi', 'keunggulan', 'testimoni', 
  * - Minimal state transitions (no continuous frame re-renders in parent components)
  * - Optimized IntersectionObservers for active section tracking
  */
-export default function useScrollExperience() {
+export default function useScrollExperience(currentView = 'home') {
   const [activeSection, setActiveSection] = useState('beranda');
   const [showFloatingCta, setShowFloatingCta] = useState(false);
 
@@ -36,6 +36,8 @@ export default function useScrollExperience() {
   }, []);
 
   useEffect(() => {
+    if (currentView !== 'home') return undefined;
+
     const sections = sectionIds
       .map((id) => document.getElementById(id))
       .filter(Boolean);
@@ -61,7 +63,7 @@ export default function useScrollExperience() {
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, []);
+  }, [currentView]);
 
   return {
     activeSection,

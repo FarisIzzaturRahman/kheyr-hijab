@@ -32,7 +32,7 @@ export default function BackToTop() {
       type="button"
       onClick={scrollToTop}
       aria-label="Kembali ke atas"
-      className={`fixed bottom-20 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-goldMuted/30 bg-pearlWarm text-emeraldInk shadow-soft backdrop-blur-md transition-all duration-300 hover:bg-emeraldSoft hover:text-pearl md:bottom-8 md:right-8 ${
+      className={`fixed bottom-20 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-goldMuted/30 bg-pearlWarm text-emeraldInk shadow-soft backdrop-blur-md transition-all duration-300 hover:bg-emeraldSoft hover:text-pearl md:bottom-24 md:right-8 ${
         visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-6 opacity-0'
       }`}
     >

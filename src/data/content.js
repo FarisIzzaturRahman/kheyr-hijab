@@ -12,26 +12,6 @@ export const brand = {
   address: 'Jakarta, Indonesia'
 };
 
-/**
- * Generate standardized, URL-encoded WhatsApp link
- * @param {string} message
- * @returns {string}
- */
-export function getWhatsAppUrl(message) {
-  return `https://wa.me/${brand.whatsapp}?text=${encodeURIComponent(message)}`;
-}
-
-export const waLinks = {
-  order: getWhatsAppUrl('Assalamu alaikum KHEYR, saya ingin order hijab.'),
-  catalog: getWhatsAppUrl('Assalamu alaikum KHEYR, saya ingin lihat katalog hijab.'),
-  ask: getWhatsAppUrl('Assalamu alaikum KHEYR, saya ingin tanya koleksi hijab.'),
-  stylist: getWhatsAppUrl('Assalamu alaikum KHEYR, saya ingin konsultasi gratis dengan Hijab Stylist untuk pilihan warna dan model.'),
-  forProduct: (productName, color) => {
-    const colorText = color ? ` warna ${color}` : '';
-    return getWhatsAppUrl(`Assalamu alaikum KHEYR, saya ingin tanya dan order produk ${productName}${colorText}.`);
-  }
-};
-
 export const colorMap = {
   Emerald: '#073d32',
   Sage: '#8f9f86',

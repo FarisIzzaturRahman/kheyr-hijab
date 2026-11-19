@@ -10,7 +10,7 @@ export default function Header({
   onNavigateToHome,
   onMenuOpenChange
 }) {
-  const { brand, waLinks, products } = useStore();
+  const { brand, waLinks, products, promoBanner } = useStore();
   const [open, setOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -56,12 +56,23 @@ export default function Header({
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+      className={`sticky inset-x-0 top-0 z-50 transition-all duration-300 ${
         isScrolled
           ? 'border-b border-champagne/25 bg-emeraldInk/95 shadow-emerald backdrop-blur-xl'
-          : 'border-b border-champagne/15 bg-emeraldInk/85 backdrop-blur-md'
+          : 'border-b border-champagne/15 bg-emeraldInk/90 backdrop-blur-md'
       }`}
     >
+      {/* Top Announcement Promo Bar stacked cleanly inside sticky header */}
+      {promoBanner?.enabled && (
+        <div className="overflow-hidden bg-gradient-to-r from-emeraldDeep via-emeraldSoft to-emeraldDeep py-2 px-4 text-center text-xs font-bold text-pearl border-b border-champagne/25">
+          <div className="mx-auto flex max-w-7xl items-center justify-center gap-2">
+            <span className="rounded-full bg-champagne px-2.5 py-0.5 text-[10px] font-bold text-emeraldInk shadow-xs shrink-0">
+              {promoBanner.badge || 'PROMO'}
+            </span>
+            <span className="truncate">{promoBanner.text}</span>
+          </div>
+        </div>
+      )}
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:h-[72px] lg:px-8">
         <a
           href="#beranda"
@@ -127,6 +138,8 @@ export default function Header({
         {/* Desktop CTA */}
         <a
           href={waLinks.ask}
+          target="_blank"
+          rel="noopener noreferrer"
           className="hidden items-center gap-2 rounded-full border border-champagne/60 bg-champagne/10 px-5 py-2.5 text-sm font-semibold text-pearl transition hover:bg-champagne hover:text-emeraldInk hover:shadow-soft lg:inline-flex"
         >
           <MessageCircle size={16} />
@@ -195,6 +208,8 @@ export default function Header({
 
             <a
               href={waLinks.ask}
+              target="_blank"
+              rel="noopener noreferrer"
               className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-champagne px-5 py-3 text-sm font-bold text-emeraldInk shadow-md"
               onClick={closeMenu}
             >

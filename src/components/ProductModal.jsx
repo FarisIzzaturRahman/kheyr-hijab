@@ -1,7 +1,7 @@
 import { Check, Info, Maximize2, MessageCircle, ShieldCheck, Sparkles, Tag, Ticket, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useStore } from '../context/StoreContext';
+import { safeUrl, useStore } from '../context/StoreContext';
 
 export default function ProductModal({ product, onClose }) {
   const { colorMap, waLinks, promoCodes, calculatePromoDiscount } = useStore();
@@ -104,7 +104,7 @@ export default function ProductModal({ product, onClose }) {
           {/* Left: Expanded Model Image Frame */}
           <div className="group relative aspect-[4/3] sm:aspect-square md:aspect-auto md:h-full md:min-h-[520px] overflow-hidden bg-mist">
             <img
-              src={product.image}
+              src={safeUrl(product.image, '/images/product-daily-voile.jpg')}
               alt={`${product.name} - ${product.category}`}
               className={`h-full w-full object-cover object-center transition-transform duration-500 ${
                 isZoomed ? 'scale-125 cursor-zoom-out' : 'cursor-zoom-in'
@@ -282,6 +282,8 @@ export default function ProductModal({ product, onClose }) {
             <div className="mt-6 pt-2">
               <a
                 href={orderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex w-full items-center justify-center gap-2 rounded-full bg-emeraldSoft px-6 py-3.5 text-xs sm:text-sm font-bold text-pearl shadow-emerald transition hover:bg-emeraldDeep hover:shadow-xl hover:scale-[1.01]"
               >
                 <MessageCircle size={17} />

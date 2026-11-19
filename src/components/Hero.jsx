@@ -1,22 +1,16 @@
 import { ArrowDown, ArrowRight, MessageCircle, RotateCcw, ShieldCheck, Sparkles, Star } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 
-export default function Hero({ scrollOffset = 0 }) {
+export default function Hero() {
   const { brand, waLinks } = useStore();
 
   return (
-    <section id="beranda" className="relative overflow-hidden pt-16 lg:pt-[72px]">
+    <section id="beranda" className="relative overflow-hidden">
       <div className="grid min-h-[calc(100vh-4rem)] bg-emeraldInk lg:grid-cols-[1.1fr_0.9fr]">
-        <div
-          className="relative flex items-center overflow-hidden bg-satin bg-cover bg-center px-4 py-14 sm:px-6 lg:px-12 lg:py-16 xl:px-16"
-          style={{ backgroundPosition: `center ${scrollOffset * -0.45}px` }}
-        >
+        <div className="relative flex items-center overflow-hidden bg-satin bg-cover bg-center px-4 py-14 sm:px-6 lg:px-12 lg:py-16 xl:px-16">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(232,217,189,0.22),transparent_32%),linear-gradient(105deg,rgba(6,29,24,0.32),rgba(6,29,24,0.88))]" />
           
-          <div
-            className="relative z-10 mx-auto w-full max-w-xl animate-floatIn"
-            style={{ transform: scrollOffset ? `translateY(${scrollOffset}px)` : undefined }}
-          >
+          <div className="relative z-10 mx-auto w-full max-w-xl animate-floatIn">
             {/* Exclusive Badge */}
             <div className="inline-flex items-center gap-2 rounded-full border border-champagne/40 bg-emeraldSoft/60 px-4 py-1.5 text-xs font-bold tracking-wide text-champagne backdrop-blur-md">
               <Sparkles size={14} className="text-champagne" />
@@ -44,6 +38,8 @@ export default function Hero({ scrollOffset = 0 }) {
               </a>
               <a
                 href={waLinks.catalog}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-champagne/70 bg-emeraldSoft/30 px-6 py-3 text-sm font-bold text-pearl backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-champagne hover:text-emeraldInk"
               >
                 <MessageCircle size={17} />

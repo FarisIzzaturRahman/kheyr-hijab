@@ -72,7 +72,7 @@ describe('KHEYR Hijab Web App - Full Frontend Suite & Admin CMS', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('navigates to Catalog Page, searches for items, and navigates back to Home', () => {
+  it('navigates to Catalog Page, searches for items, and navigates back to Home', async () => {
     render(<App />);
 
     // Click E-Katalog in Header
@@ -80,8 +80,8 @@ describe('KHEYR Hijab Web App - Full Frontend Suite & Admin CMS', () => {
     expect(catalogNavBtns.length).toBeGreaterThan(0);
     fireEvent.click(catalogNavBtns[0]);
 
-    // Catalog page is rendered
-    expect(screen.getByText(/Seluruh Koleksi KHEYR/i)).toBeInTheDocument();
+    // Catalog page is rendered (lazy-loaded)
+    expect(await screen.findByText(/Seluruh Koleksi KHEYR/i)).toBeInTheDocument();
     expect(screen.getByText(/KHEYR Paris Ultrafine/i)).toBeInTheDocument();
     expect(screen.getByText(/KHEYR Royale Organza/i)).toBeInTheDocument();
     expect(screen.getByText(/KHEYR Everyday Bergo/i)).toBeInTheDocument();
@@ -106,15 +106,18 @@ describe('KHEYR Hijab Web App - Full Frontend Suite & Admin CMS', () => {
     expect(screen.getByText(brand.tagline)).toBeInTheDocument();
   });
 
-  it('allows admin authentication and manages promo codes CRUD', () => {
+  it('allows admin authentication and manages promo codes CRUD', async () => {
     // Set hash to #admin
     window.location.hash = 'admin';
     sessionStorage.removeItem('kheyr_admin_auth');
 
     render(<App />);
 
-    // Login Gate
-    expect(screen.getByText('Portal Admin KHEYR')).toBeInTheDocument();
+    // Login Gate (lazy-loaded)
+    expect(await screen.findByText('Portal Admin KHEYR')).toBeInTheDocument();
+    // Ensure default PIN is never printed on login screen
+    expect(screen.queryByText(/PIN Bawaan/i)).not.toBeInTheDocument();
+
     const pinInput = screen.getByPlaceholderText(/masukkan pin/i);
     const loginBtn = screen.getByRole('button', { name: /masuk ke dashboard/i });
 

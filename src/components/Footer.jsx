@@ -1,17 +1,34 @@
 import { CreditCard, Grid, Instagram, Mail, MapPin, MessageCircle, Package, ShoppingBag, Truck } from 'lucide-react';
-import { useStore } from '../context/StoreContext';
+import { safeUrl, useStore } from '../context/StoreContext';
 import { navItems } from '../data/content';
 
-export default function Footer({ onNavigateToCatalog }) {
+export default function Footer({ currentView = 'home', onNavigateToCatalog, onNavigateToHome }) {
   const { brand, waLinks, products } = useStore();
   const year = new Date().getFullYear();
+  const instagramUrl = safeUrl(brand.instagram, 'https://instagram.com/kheyr.hijab');
+  const marketplaceUrl = safeUrl(brand.marketplace, 'https://shopee.co.id/kheyr.hijab');
+
+  const handleSectionClick = (e, href) => {
+    if (currentView !== 'home') {
+      e.preventDefault();
+      onNavigateToHome?.();
+      setTimeout(() => {
+        const el = document.getElementById(href.slice(1));
+        el?.scrollIntoView({ behavior: 'smooth' });
+      }, 60);
+    }
+  };
 
   return (
     <footer id="kontak" className="border-t border-champagne/15 bg-emeraldInk px-4 py-16 text-pearl sm:px-6 lg:px-8">
       <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.3fr_0.8fr_1fr_1.1fr]">
         {/* Brand Column */}
         <div>
-          <a href="#beranda" className="font-display text-4xl font-semibold text-champagne">
+          <a
+            href="#beranda"
+            onClick={(e) => handleSectionClick(e, '#beranda')}
+            className="font-display text-4xl font-semibold text-champagne"
+          >
             {brand.name}
           </a>
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-pearl/75">
@@ -19,7 +36,9 @@ export default function Footer({ onNavigateToCatalog }) {
           </p>
           <div className="mt-6 flex gap-3">
             <a
-              href={brand.instagram}
+              href={instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               aria-label="Instagram KHEYR"
               className="flex h-10 w-10 items-center justify-center rounded-full border border-champagne/25 text-champagne transition hover:bg-champagne hover:text-emeraldInk"
             >
@@ -27,13 +46,17 @@ export default function Footer({ onNavigateToCatalog }) {
             </a>
             <a
               href={waLinks.order}
+              target="_blank"
+              rel="noopener noreferrer"
               aria-label="WhatsApp KHEYR"
               className="flex h-10 w-10 items-center justify-center rounded-full border border-champagne/25 text-champagne transition hover:bg-champagne hover:text-emeraldInk"
             >
               <MessageCircle size={18} />
             </a>
             <a
-              href={brand.marketplace}
+              href={marketplaceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               aria-label="Marketplace KHEYR"
               className="flex h-10 w-10 items-center justify-center rounded-full border border-champagne/25 text-champagne transition hover:bg-champagne hover:text-emeraldInk"
             >
@@ -47,7 +70,12 @@ export default function Footer({ onNavigateToCatalog }) {
           <h2 className="text-sm font-bold uppercase tracking-wider text-champagne">Navigasi</h2>
           <div className="mt-4 flex flex-col gap-3">
             {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="text-sm text-pearl/70 transition hover:text-champagne">
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={(e) => handleSectionClick(e, item.href)}
+                className="text-sm text-pearl/70 transition hover:text-champagne"
+              >
                 {item.label}
               </a>
             ))}
@@ -69,7 +97,12 @@ export default function Footer({ onNavigateToCatalog }) {
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-champagne">Hubungi Kami</h2>
           <div className="mt-4 space-y-4 text-sm text-pearl/75">
-            <a href={waLinks.order} className="flex items-start gap-3 transition hover:text-champagne">
+            <a
+              href={waLinks.order}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 transition hover:text-champagne"
+            >
               <MessageCircle className="mt-0.5 shrink-0 text-champagne" size={17} />
               <span>
                 {brand.whatsappLabel || brand.whatsapp}
@@ -77,7 +110,12 @@ export default function Footer({ onNavigateToCatalog }) {
                 <span className="text-xs text-pearl/60">Chat via WhatsApp</span>
               </span>
             </a>
-            <a href={brand.instagram} className="flex items-start gap-3 transition hover:text-champagne">
+            <a
+              href={instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 transition hover:text-champagne"
+            >
               <Instagram className="mt-0.5 shrink-0 text-champagne" size={17} />
               <span>
                 {brand.instagramHandle}

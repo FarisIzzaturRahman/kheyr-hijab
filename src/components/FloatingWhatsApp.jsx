@@ -12,6 +12,8 @@ export default function FloatingWhatsApp({ visible }) {
     >
       <a
         href={waLinks.ask}
+        target="_blank"
+        rel="noopener noreferrer"
         className="group relative flex items-center gap-2.5 rounded-full bg-emeraldSoft px-5 py-3.5 text-sm font-bold text-pearl shadow-emerald backdrop-blur-md transition-all duration-300 hover:bg-emeraldDeep hover:shadow-2xl hover:scale-105"
         aria-label="Chat Admin via WhatsApp"
       >

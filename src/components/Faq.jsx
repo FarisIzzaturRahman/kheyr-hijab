@@ -48,6 +48,8 @@ export default function Faq() {
 
               <a
                 href={waLinks.stylist}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-champagne px-5 py-3 text-xs sm:text-sm font-bold text-emeraldInk shadow-md transition hover:bg-pearl hover:shadow-lg"
               >
                 <MessageCircle size={17} />
